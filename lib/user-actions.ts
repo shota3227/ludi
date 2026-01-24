@@ -35,17 +35,16 @@ export async function adminCreateUserAction(userData: {
             return { success: false, error: 'User creation failed in Auth' }
         }
 
-        // 2. DB ユーザーの作成 (同じく管理用クライアントを使用して RLS を回避)
+        // 2. DB ユーザーの作成 (ID同期を解除し、DB側の自動生成に委ねる)
         const { data: dbData, error: dbError } = await supabase
             .from('users')
             .insert({
-                id: authData.user.id, // Auth UID と同期
                 email: userData.email,
                 name: userData.name,
                 nickname: userData.nickname || userData.name,
                 role: userData.role,
                 primary_store_id: userData.primary_store_id,
-                auth_id: authData.user.id,
+                auth_id: authData.user.id, // 認証IDとの紐付けは維持
                 avatar_id: 'default_01',
                 rank: 1,
                 is_active: true,
