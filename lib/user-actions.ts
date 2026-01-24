@@ -35,21 +35,29 @@ export async function adminCreateUserAction(userData: {
             return { success: false, error: 'User creation failed in Auth' }
         }
 
-        // 2. DB ユーザーの作成
-        const dbUser = await createUser({
-            email: userData.email,
-            name: userData.name,
-            nickname: userData.nickname || userData.name,
-            role: userData.role,
-            primary_store_id: userData.primary_store_id,
-            auth_id: authData.user.id,
-        })
+        // 2. DB ユーザーの作成 (同じく管理用クライアントを使用して RLS を回避)
+        const { data: dbData, error: dbError } = await supabase
+            .from('users')
+            .insert({
+                email: userData.email,
+                name: userData.name,
+                nickname: userData.nickname || userData.name,
+                role: userData.role,
+                primary_store_id: userData.primary_store_id,
+                auth_id: authData.user.id,
+                avatar_id: 'default_01',
+                rank: 1,
+                is_active: true,
+            })
+            .select()
+            .single()
 
-        if (!dbUser) {
-            return { success: false, error: 'User metadata could not be saved to database' }
+        if (dbError) {
+            console.error('Admin DB Error:', dbError)
+            return { success: false, error: `データベース保存エラー: ${dbError.message}` }
         }
 
-        return { success: true, user: dbUser }
+        return { success: true, user: dbData as unknown as User }
     } catch (error: any) {
         console.error('Server Action Error:', error)
         return { success: false, error: error.message || 'Internal server error' }
