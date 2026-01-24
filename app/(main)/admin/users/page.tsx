@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useAuthStore } from '@/lib/store'
 import { supabase } from '@/lib/supabase'
 import { getStoreMembers, getAllStores, createUser } from '@/lib/database'
-import { adminCreateUserAction } from '@/lib/user-actions'
+import { adminCreateUserAction, adminGetAllUsersAction, adminGetStoreMembersAction } from '@/lib/user-actions'
 import { Header, Modal, Loading, useToast, getAvatarEmoji } from '@/components/common'
 import type { User, Store } from '@/types'
 
@@ -45,15 +45,18 @@ export default function AdminUsersPage() {
       const allStores = await getAllStores()
       setStores(allStores)
 
-      // ユーザー一覧（自分の店舗のみ、または全店舗）
+      // ユーザー一覧（管理者権限で取得して RLS を回避）
       if (currentUser?.role === 'manager' && currentStore) {
-        const members = await getStoreMembers(currentStore.id)
-        setUsers(members)
+        const result = await adminGetStoreMembersAction(currentStore.id)
+        if (result.success) {
+          setUsers(result.users || [])
+        }
         setNewUser(prev => ({ ...prev, primary_store_id: currentStore.id }))
       } else {
-        // 全ユーザーを取得
-        const { data } = await supabase.from('users').select('*').order('created_at', { ascending: false })
-        setUsers(data || [])
+        const result = await adminGetAllUsersAction()
+        if (result.success) {
+          setUsers(result.users || [])
+        }
       }
     } catch (error) {
       console.error('Error loading data:', error)

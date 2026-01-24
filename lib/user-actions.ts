@@ -63,3 +63,37 @@ export async function adminCreateUserAction(userData: {
         return { success: false, error: error.message || 'Internal server error' }
     }
 }
+
+export async function adminGetAllUsersAction() {
+    try {
+        const supabase = getSupabaseAdmin()
+        const { data, error } = await supabase
+            .from('users')
+            .select('*')
+            .order('created_at', { ascending: false })
+
+        if (error) throw error
+        return { success: true, users: data as User[] }
+    } catch (error: any) {
+        console.error('Admin Fetch Error:', error)
+        return { success: false, error: error.message }
+    }
+}
+
+export async function adminGetStoreMembersAction(storeId: string) {
+    try {
+        const supabase = getSupabaseAdmin()
+        const { data, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('primary_store_id', storeId)
+            .eq('is_active', true)
+            .order('rank', { ascending: false })
+
+        if (error) throw error
+        return { success: true, users: data as User[] }
+    } catch (error: any) {
+        console.error('Admin Store Fetch Error:', error)
+        return { success: false, error: error.message }
+    }
+}
