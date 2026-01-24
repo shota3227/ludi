@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useAuthStore } from '@/lib/store'
 import { supabase } from '@/lib/supabase'
 import { getStoreMembers, getAllStores, createUser } from '@/lib/database'
+import { adminCreateUserAction } from '@/lib/user-actions'
 import { Header, Modal, Loading, useToast, getAvatarEmoji } from '@/components/common'
 import type { User, Store } from '@/types'
 
@@ -69,44 +70,17 @@ export default function AdminUsersPage() {
 
     setIsSaving(true)
     try {
-      // 1. Supabase Authでユーザー作成
-      // 通常のサインアップを使用（クライアントサイドで確実な方法）
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-        email: newUser.email,
+      // サーバーサイドでのユーザー作成（Server Action）を実行
+      const result = await adminCreateUserAction({
+        email: newUser.email.trim(),
         password: newUser.password,
-        options: {
-          data: {
-            name: newUser.name,
-            role: newUser.role,
-          }
-        }
-      })
-
-      if (signUpError) {
-        console.error('Auth error:', signUpError)
-        showToast('認証ユーザーの作成に失敗しました: ' + signUpError.message)
-        setIsSaving(false)
-        return
-      }
-
-      const authId = signUpData.user?.id
-      if (!authId) {
-        showToast('認証IDの取得に失敗しました')
-        setIsSaving(false)
-        return
-      }
-
-      // 2. DBにユーザー情報を作成
-      const dbUser = await createUser({
-        email: newUser.email,
         name: newUser.name,
-        nickname: newUser.nickname || newUser.name,
+        nickname: newUser.nickname,
         role: newUser.role,
         primary_store_id: newUser.primary_store_id,
-        auth_id: authId,
       })
 
-      if (dbUser) {
+      if (result.success) {
         showToast('✅ ユーザーを作成しました')
         setIsModalOpen(false)
         setNewUser({
@@ -119,13 +93,12 @@ export default function AdminUsersPage() {
         })
         loadData()
       } else {
-        // DB登録に失敗したがAuthには登録された状態のケア
-        console.error('DB user creation failed despite Auth success')
-        showToast('ユーザー情報の保存に失敗しました。管理者にお問い合わせください。')
+        console.error('Action error:', result.error)
+        showToast(`❌ 作成に失敗しました: ${result.error}`)
       }
-    } catch (error) {
-      console.error('Error creating user:', error)
-      showToast('予期せぬエラーが発生しました')
+    } catch (error: any) {
+      console.error('Unexpected error:', error)
+      showToast('予期せぬエラーが発生しました。環境変数が正しく設定されているか確認してください。')
     } finally {
       setIsSaving(false)
     }
@@ -195,8 +168,8 @@ export default function AdminUsersPage() {
                 <button
                   onClick={() => toggleUserActive(user.id, user.is_active)}
                   className={`text-xs px-2 py-1 rounded ${user.is_active
-                      ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                      : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                    ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                     }`}
                 >
                   {user.is_active ? '有効' : '無効'}
