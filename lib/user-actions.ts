@@ -39,6 +39,7 @@ export async function adminCreateUserAction(userData: {
         const { data: dbData, error: dbError } = await supabase
             .from('users')
             .insert({
+                id: authData.user.id, // Auth UID と同期
                 email: userData.email,
                 name: userData.name,
                 nickname: userData.nickname || userData.name,
