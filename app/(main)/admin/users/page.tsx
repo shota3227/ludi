@@ -10,13 +10,13 @@ import type { User, Store } from '@/types'
 export default function AdminUsersPage() {
   const currentUser = useAuthStore((s) => s.user)
   const currentStore = useAuthStore((s) => s.store)
-  
+
   const [users, setUsers] = useState<User[]>([])
   const [stores, setStores] = useState<Store[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
-  
+
   const [newUser, setNewUser] = useState({
     email: '',
     password: '',
@@ -25,7 +25,7 @@ export default function AdminUsersPage() {
     role: 'staff' as User['role'],
     primary_store_id: '',
   })
-  
+
   const { showToast, ToastComponent } = useToast()
 
   // 管理者権限チェック
@@ -43,7 +43,7 @@ export default function AdminUsersPage() {
       // 店舗一覧
       const allStores = await getAllStores()
       setStores(allStores)
-      
+
       // ユーザー一覧（自分の店舗のみ、または全店舗）
       if (currentUser?.role === 'manager' && currentStore) {
         const members = await getStoreMembers(currentStore.id)
@@ -66,36 +66,36 @@ export default function AdminUsersPage() {
       showToast('必須項目を入力してください')
       return
     }
-    
+
     setIsSaving(true)
     try {
       // 1. Supabase Authでユーザー作成
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      // 通常のサインアップを使用（クライアントサイドで確実な方法）
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: newUser.email,
         password: newUser.password,
-        email_confirm: true,
-      })
-      
-      // admin APIが使えない場合は通常のサインアップを使用
-      let authId: string | null = null
-      if (authError) {
-        // 通常のサインアップを試みる
-        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-          email: newUser.email,
-          password: newUser.password,
-        })
-        
-        if (signUpError) {
-          console.error('Auth error:', signUpError)
-          showToast('認証ユーザーの作成に失敗しました: ' + signUpError.message)
-          setIsSaving(false)
-          return
+        options: {
+          data: {
+            name: newUser.name,
+            role: newUser.role,
+          }
         }
-        authId = signUpData.user?.id || null
-      } else {
-        authId = authData.user?.id || null
+      })
+
+      if (signUpError) {
+        console.error('Auth error:', signUpError)
+        showToast('認証ユーザーの作成に失敗しました: ' + signUpError.message)
+        setIsSaving(false)
+        return
       }
-      
+
+      const authId = signUpData.user?.id
+      if (!authId) {
+        showToast('認証IDの取得に失敗しました')
+        setIsSaving(false)
+        return
+      }
+
       // 2. DBにユーザー情報を作成
       const dbUser = await createUser({
         email: newUser.email,
@@ -103,9 +103,9 @@ export default function AdminUsersPage() {
         nickname: newUser.nickname || newUser.name,
         role: newUser.role,
         primary_store_id: newUser.primary_store_id,
-        auth_id: authId || undefined,
+        auth_id: authId,
       })
-      
+
       if (dbUser) {
         showToast('✅ ユーザーを作成しました')
         setIsModalOpen(false)
@@ -119,11 +119,13 @@ export default function AdminUsersPage() {
         })
         loadData()
       } else {
-        showToast('ユーザー情報の保存に失敗しました')
+        // DB登録に失敗したがAuthには登録された状態のケア
+        console.error('DB user creation failed despite Auth success')
+        showToast('ユーザー情報の保存に失敗しました。管理者にお問い合わせください。')
       }
     } catch (error) {
       console.error('Error creating user:', error)
-      showToast('エラーが発生しました')
+      showToast('予期せぬエラーが発生しました')
     } finally {
       setIsSaving(false)
     }
@@ -135,7 +137,7 @@ export default function AdminUsersPage() {
         .from('users')
         .update({ is_active: !currentStatus })
         .eq('id', userId)
-      
+
       if (!error) {
         showToast(currentStatus ? 'ユーザーを無効化しました' : 'ユーザーを有効化しました')
         loadData()
@@ -192,11 +194,10 @@ export default function AdminUsersPage() {
                 </div>
                 <button
                   onClick={() => toggleUserActive(user.id, user.is_active)}
-                  className={`text-xs px-2 py-1 rounded ${
-                    user.is_active 
-                      ? 'bg-green-100 text-green-700 hover:bg-green-200' 
+                  className={`text-xs px-2 py-1 rounded ${user.is_active
+                      ? 'bg-green-100 text-green-700 hover:bg-green-200'
                       : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                  }`}
+                    }`}
                 >
                   {user.is_active ? '有効' : '無効'}
                 </button>
