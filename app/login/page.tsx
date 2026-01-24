@@ -14,26 +14,27 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!email || !password) {
       showToast('メールアドレスとパスワードを入力してください')
       return
     }
-    
+
     setIsLoading(true)
-    
+
     try {
       const { data, error } = await signIn(email, password)
-      
+
       if (error) {
         console.error('Login error:', error)
         showToast('ログインに失敗しました。メールアドレスとパスワードを確認してください。')
         return
       }
-      
+
       if (data.user) {
         showToast('✅ ログインしました')
-        // AuthProviderが自動的にリダイレクトする
+        // AuthProviderの自動リダイレクトを待たずに明示的に移動
+        router.push('/')
       }
     } catch (err) {
       console.error('Login error:', err)

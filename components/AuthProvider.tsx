@@ -26,24 +26,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const checkAuth = async () => {
       try {
         const authUser = await getCurrentAuthUser()
-        
+
         if (authUser) {
           // DBからユーザー情報を取得
           const dbUser = await getUserByAuthId(authUser.id)
-          
+
           if (dbUser) {
             setUser(dbUser)
-            
+
             // 店舗情報を取得
             if (dbUser.primary_store_id) {
               const store = await getStore(dbUser.primary_store_id)
               setStore(store)
             }
-            
+
             // 勤怠状態を取得
             const attendance = await getCurrentAttendance(dbUser.id)
             setAttendance(attendance)
-            
+
             // 未読通知数を取得
             const unread = await getUnreadCount(dbUser.id)
             setUnreadCount(unread)
@@ -100,9 +100,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const isPublicPath = PUBLIC_PATHS.includes(pathname)
 
     if (!user && !isPublicPath) {
-      router.push('/login')
+      router.replace('/login')
     } else if (user && isPublicPath) {
-      router.push('/')
+      router.replace('/')
     }
   }, [user, isLoading, pathname, router])
 
