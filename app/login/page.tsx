@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { signIn } from '@/lib/supabase'
 import { useToast } from '@/components/common'
+import { useAuthStore } from '@/lib/store'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -11,6 +12,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const { showToast, ToastComponent } = useToast()
+  const setLoading = useAuthStore((s) => s.setLoading)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -28,18 +30,19 @@ export default function LoginPage() {
       if (error) {
         console.error('Login error:', error)
         showToast('ログインに失敗しました。メールアドレスとパスワードを確認してください。')
+        setIsLoading(false)
         return
       }
 
       if (data.user) {
         showToast('✅ ログインしました')
-        // AuthProviderの自動リダイレクトを待たずに明示的に移動
+        // 遷移中の認証チェックで弾かれないように、グローバルなローディング状態をtrueにする
+        setLoading(true)
         router.push('/')
       }
     } catch (err) {
       console.error('Login error:', err)
       showToast('エラーが発生しました')
-    } finally {
       setIsLoading(false)
     }
   }
