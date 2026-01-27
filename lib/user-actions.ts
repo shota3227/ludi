@@ -97,3 +97,43 @@ export async function adminGetStoreMembersAction(storeId: string) {
         return { success: false, error: error.message }
     }
 }
+
+// ユーザー同期用：全Authユーザーの取得
+export async function adminGetAllAuthUsersAction() {
+    try {
+        const supabase = getSupabaseAdmin()
+        // ページネーションが必要な場合は考慮が必要ですが、まずは1000件取得
+        const { data, error } = await supabase.auth.admin.listUsers({ perPage: 1000 })
+
+        if (error) throw error
+        // 必要な情報だけ返す
+        const users = data.users.map((u: any) => ({
+            id: u.id,
+            email: u.email
+        }))
+        return { success: true, users }
+    } catch (error: any) {
+        console.error('Admin Auth Fetch Error:', error)
+        return { success: false, error: error.message }
+    }
+}
+
+// ユーザー同期用：ゴーストユーザー（Authに存在しないユーザー）の削除
+export async function adminDeleteGhostUsersAction(userIds: string[]) {
+    if (!userIds.length) return { success: true }
+
+    try {
+        const supabase = getSupabaseAdmin()
+        // DBから削除（関連データもCASCADE削除されることを期待、または別途削除が必要か要確認だが、通常はusers削除でOK）
+        const { error } = await supabase
+            .from('users')
+            .delete()
+            .in('id', userIds)
+
+        if (error) throw error
+        return { success: true }
+    } catch (error: any) {
+        console.error('Admin Ghost Delete Error:', error)
+        return { success: false, error: error.message }
+    }
+}

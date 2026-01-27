@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useAuthStore } from '@/lib/store'
 import { supabase } from '@/lib/supabase'
 import { getStoreMembers, getAllStores, createUser } from '@/lib/database'
-import { adminCreateUserAction, adminGetAllUsersAction, adminGetStoreMembersAction } from '@/lib/user-actions'
+import { adminCreateUserAction, adminGetAllUsersAction, adminGetStoreMembersAction, adminGetAllAuthUsersAction, adminDeleteGhostUsersAction } from '@/lib/user-actions'
 import { Header, Modal, Loading, useToast, getAvatarEmoji } from '@/components/common'
 import type { User, Store } from '@/types'
 
@@ -138,15 +138,77 @@ export default function AdminUsersPage() {
     return <Loading message="読み込み中..." />
   }
 
+  const [isSyncModalOpen, setIsSyncModalOpen] = useState(false)
+  const [ghostUsers, setGhostUsers] = useState<User[]>([])
+  const [isSyncing, setIsSyncing] = useState(false)
+
+  const handleCheckSync = async () => {
+    setIsSyncing(true)
+    try {
+      // 1. Authユーザー全件取得
+      const authResult = await adminGetAllAuthUsersAction()
+      if (!authResult.success || !authResult.users) {
+        showToast('Authユーザーの取得に失敗しました')
+        return
+      }
+
+      const authUserIds = new Set(authResult.users.map((u: any) => u.id))
+
+      // 2. DBユーザーにあってAuthにないもの（ゴースト）を特定
+      const ghosts = users.filter(user => !authUserIds.has(user.id))
+      setGhostUsers(ghosts)
+      setIsSyncModalOpen(true)
+
+      if (ghosts.length === 0) {
+        showToast('✅ データの不整合は見つかりませんでした')
+      }
+    } catch (error) {
+      console.error('Sync check error', error)
+      showToast('同期チェック中にエラーが発生しました')
+    } finally {
+      setIsSyncing(false)
+    }
+  }
+
+  const handleExecuteSync = async () => {
+    if (!ghostUsers.length) return
+    if (!confirm(`${ghostUsers.length}件の不明なユーザーデータを削除しますか？この操作は元に戻せません。`)) return
+
+    setIsSyncing(true)
+    try {
+      const result = await adminDeleteGhostUsersAction(ghostUsers.map(u => u.id))
+      if (result.success) {
+        showToast('✅ データの整理が完了しました')
+        setIsSyncModalOpen(false)
+        loadData() // リスト更新
+      } else {
+        showToast(`削除に失敗しました: ${result.error}`)
+      }
+    } catch (error) {
+      showToast('削除中にエラーが発生しました')
+    } finally {
+      setIsSyncing(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 pb-4">
       <Header title="ユーザー管理" showBack backHref="/" variant="manager" />
 
       <main className="p-4 max-w-lg mx-auto space-y-4">
-        {/* 新規作成ボタン */}
-        <button onClick={() => setIsModalOpen(true)} className="btn-primary w-full">
-          ＋ 新規ユーザーを追加
-        </button>
+        {/* アクションボタン */}
+        <div className="flex gap-2">
+          <button onClick={() => setIsModalOpen(true)} className="btn-primary flex-1">
+            ＋ 新規ユーザーを追加
+          </button>
+          <button
+            onClick={handleCheckSync}
+            className="bg-gray-600 text-white px-4 py-2 rounded-lg shadow font-bold hover:bg-gray-700 whitespace-nowrap"
+            disabled={isSyncing}
+          >
+            {isSyncing ? '確認中...' : '⚙️ データ整理'}
+          </button>
+        </div>
 
         {/* ユーザー一覧 */}
         <div className="space-y-2">
@@ -260,6 +322,46 @@ export default function AdminUsersPage() {
             <button onClick={handleCreateUser} disabled={isSaving} className="btn-primary flex-1">
               {isSaving ? '作成中...' : '作成'}
             </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* データ同期モーダル */}
+      <Modal isOpen={isSyncModalOpen} onClose={() => setIsSyncModalOpen(false)} title="データ整合性チェック">
+        <div className="space-y-4">
+          <div className="text-sm text-gray-600">
+            認証システム（Supabase Auth）とデータベース（Public Users）を照合しました。
+          </div>
+
+          {ghostUsers.length > 0 ? (
+            <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
+              <p className="font-bold text-orange-800 mb-2">⚠️ {ghostUsers.length}件の不明なデータが見つかりました</p>
+              <p className="text-xs text-orange-700 mb-3">
+                これらは認証システムに存在しない（ログインできない）古いデータやサンプルデータです。削除して整理することをお勧めします。
+              </p>
+              <div className="max-h-40 overflow-y-auto bg-white rounded border border-orange-100 p-2 text-xs text-gray-600 space-y-1">
+                {ghostUsers.map((user: User) => (
+                  <div key={user.id} className="flex justify-between">
+                    <span>{user.name} ({user.email})</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="bg-green-50 p-4 rounded-lg border border-green-200 text-green-800 text-center">
+              ✅ データの不整合はありません。<br />すべてのデータが正常です。
+            </div>
+          )}
+
+          <div className="flex gap-2 pt-2">
+            <button onClick={() => setIsSyncModalOpen(false)} className="btn-secondary flex-1">
+              閉じる
+            </button>
+            {ghostUsers.length > 0 && (
+              <button onClick={handleExecuteSync} disabled={isSyncing} className="bg-red-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-red-600 active:bg-red-700 transition shadow-sm flex-1">
+                {isSyncing ? '処理中...' : 'ゴミ箱に入れて整理する'}
+              </button>
+            )}
           </div>
         </div>
       </Modal>
