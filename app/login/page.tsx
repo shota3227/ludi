@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { signIn } from '@/lib/supabase'
 import { useToast } from '@/components/common'
 import { useAuthStore } from '@/lib/store'
+import { debugCreateTestAdminAction } from '@/lib/user-actions'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -13,6 +14,21 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const { showToast, ToastComponent } = useToast()
   const setLoading = useAuthStore((s) => s.setLoading)
+
+  const handleCreateTestUser = async () => {
+    if (confirm('テスト用管理者(test-admin@luvir.com)を作成しますか？')) {
+      setIsLoading(true)
+      const res = await debugCreateTestAdminAction()
+      setIsLoading(false)
+      if (res.success) {
+        showToast('✅ テストユーザーを作成しました')
+        setEmail('test-admin@luvir.com')
+        setPassword('password123')
+      } else {
+        showToast(`失敗: ${res.error}`)
+      }
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -100,6 +116,16 @@ export default function LoginPage() {
         <p className="text-center text-sm text-gray-500 mt-6">
           ※ アカウントは管理者が作成します
         </p>
+
+        <div className="mt-8 pt-4 border-t border-gray-200">
+          <button
+            type="button"
+            onClick={handleCreateTestUser}
+            className="w-full text-xs text-gray-400 hover:text-gray-600 underline"
+          >
+            [デバッグ用] テスト管理者を作成
+          </button>
+        </div>
       </div>
 
       <ToastComponent />

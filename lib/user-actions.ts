@@ -137,3 +137,64 @@ export async function adminDeleteGhostUsersAction(userIds: string[]) {
         return { success: false, error: error.message }
     }
 }
+
+// デバッグ用：テスト管理者作成
+export async function debugCreateTestAdminAction() {
+    try {
+        const supabase = getSupabaseAdmin()
+        const email = 'test-admin@luvir.com'
+        const password = 'password123'
+
+        // Authユーザー作成
+        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+            email,
+            password,
+            email_confirm: true
+        })
+
+        let userId = authData?.user?.id
+
+        if (authError) {
+            // 既に存在する場合はID再取得
+            if (authError.message.includes('already registered')) {
+                const { data: list } = await supabase.auth.admin.listUsers()
+                const existing = list.users.find((u: any) => u.email === email)
+                if (existing) userId = existing.id
+            } else {
+                throw authError
+            }
+        }
+
+        if (!userId) throw new Error('Failed to get User ID')
+
+        // 店舗ID取得
+        const { data: store } = await supabase.from('stores').select('id').limit(1).single()
+        const storeId = store?.id
+
+        if (!storeId) throw new Error('Store not found')
+
+        // DBユーザー更新/作成
+        const { error: dbError } = await supabase
+            .from('users')
+            .upsert({
+                id: userId,
+                auth_id: userId,
+                email: email,
+                name: 'テスト管理者',
+                nickname: 'AdminTester',
+                role: 'system_admin',
+                primary_store_id: storeId,
+                avatar_id: 'default_01',
+                rank: 100,
+                is_active: true,
+                updated_at: new Date().toISOString()
+            })
+
+        if (dbError) throw dbError
+
+        return { success: true }
+    } catch (error: any) {
+        console.error('Debug Create Error:', error)
+        return { success: false, error: error.message }
+    }
+}
