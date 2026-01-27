@@ -48,18 +48,23 @@ export default function AdminUsersPage() {
       // ユーザー一覧（管理者権限で取得して RLS を回避）
       if (currentUser?.role === 'manager' && currentStore) {
         const result = await adminGetStoreMembersAction(currentStore.id)
-        if (result.success) {
-          setUsers(result.users || [])
+        if (result.success && Array.isArray(result.users)) {
+          setUsers(result.users)
+        } else {
+          setUsers([])
         }
         setNewUser(prev => ({ ...prev, primary_store_id: currentStore.id }))
       } else {
         const result = await adminGetAllUsersAction()
-        if (result.success) {
-          setUsers(result.users || [])
+        if (result.success && Array.isArray(result.users)) {
+          setUsers(result.users)
+        } else {
+          setUsers([])
         }
       }
     } catch (error) {
       console.error('Error loading data:', error)
+      setUsers([])
     } finally {
       setIsLoading(false)
     }
@@ -212,36 +217,39 @@ export default function AdminUsersPage() {
 
         {/* ユーザー一覧 */}
         <div className="space-y-2">
-          {users.map((user) => (
-            <div key={user.id} className={`card p-4 ${!user.is_active && 'opacity-50'}`}>
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center text-xl">
-                  {getAvatarEmoji(user.avatar_id)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-bold truncate">
-                    {user.nickname || user.name}
-                    {user.role === 'manager' && (
-                      <span className="ml-1 text-xs bg-blue-100 text-blue-700 px-1 rounded">店長</span>
-                    )}
-                    {user.role === 'system_admin' && (
-                      <span className="ml-1 text-xs bg-red-100 text-red-700 px-1 rounded">管理者</span>
-                    )}
+          {Array.isArray(users) && users.map((user) => {
+            if (!user || !user.id) return null
+            return (
+              <div key={user.id} className={`card p-4 ${!user.is_active && 'opacity-50'}`}>
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center text-xl">
+                    {getAvatarEmoji(user.avatar_id)}
                   </div>
-                  <div className="text-xs text-gray-500 truncate">{user.email}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold truncate">
+                      {user.nickname || user.name || 'No Name'}
+                      {user.role === 'manager' && (
+                        <span className="ml-1 text-xs bg-blue-100 text-blue-700 px-1 rounded">店長</span>
+                      )}
+                      {user.role === 'system_admin' && (
+                        <span className="ml-1 text-xs bg-red-100 text-red-700 px-1 rounded">管理者</span>
+                      )}
+                    </div>
+                    <div className="text-xs text-gray-500 truncate">{user.email || 'No Email'}</div>
+                  </div>
+                  <button
+                    onClick={() => toggleUserActive(user.id, user.is_active)}
+                    className={`text-xs px-2 py-1 rounded ${user.is_active
+                      ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                      : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                      }`}
+                  >
+                    {user.is_active ? '有効' : '無効'}
+                  </button>
                 </div>
-                <button
-                  onClick={() => toggleUserActive(user.id, user.is_active)}
-                  className={`text-xs px-2 py-1 rounded ${user.is_active
-                    ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                    }`}
-                >
-                  {user.is_active ? '有効' : '無効'}
-                </button>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </main>
 
