@@ -24,8 +24,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
   useEffect(() => {
     // 初期認証チェック
     const checkAuth = async () => {
+      let mounted = true
+
+      // タイムアウト設定（5秒で強制解除）
+      const timeoutId = setTimeout(() => {
+        if (mounted) setLoading(false)
+      }, 5000)
+
       try {
         const authUser = await getCurrentAuthUser()
+
+        if (!mounted) return
 
         if (authUser) {
           // DBからユーザー情報を取得
@@ -36,19 +45,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
             // 店舗情報を取得
             if (dbUser.primary_store_id) {
-              const store = await getStore(dbUser.primary_store_id)
-              setStore(store)
+              getStore(dbUser.primary_store_id).then(store => {
+                if (mounted) setStore(store)
+              })
             }
 
-            // 勤怠状態を取得
-            const attendance = await getCurrentAttendance(dbUser.id)
-            setAttendance(attendance)
-
-            // 未読通知数を取得
-            const unread = await getUnreadCount(dbUser.id)
-            setUnreadCount(unread)
+            // 勤怠状態と通知（非同期で実行し、メインフローをブロックしない）
+            getCurrentAttendance(dbUser.id).then(att => {
+              if (mounted) setAttendance(att)
+            })
+            getUnreadCount(dbUser.id).then(count => {
+              if (mounted) setUnreadCount(count)
+            })
           } else {
-            // DBにユーザーがいない場合はログアウト
+            // DBにユーザーがいない場合はログアウト（Authには残っているがDBにない状態）
+            console.warn('User found in Auth but not in DB. Signing out.')
             await supabase.auth.signOut()
             setUser(null)
           }
@@ -57,13 +68,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
       } catch (error) {
         console.error('Auth check error:', error)
-        setUser(null)
+        if (mounted) setUser(null)
       } finally {
-        setLoading(false)
+        clearTimeout(timeoutId)
+        if (mounted) setLoading(false)
       }
+
+      return () => { mounted = false }
     }
 
-    checkAuth()
+    const cleanup = checkAuth()
 
     // 認証状態の変更を監視
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
